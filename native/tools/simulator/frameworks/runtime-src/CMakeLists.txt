@@ -9,21 +9,41 @@ if(APPLE)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
-option(USE_SE_V8        "USE V8 JavaScript Engine"          ON)
-option(USE_V8_DEBUGGER  "Enable Chrome Remote inspector"    ON)
-option(USE_SOCKET       "Enable WebSocket & SocketIO"       ON)
-option(USE_AUDIO        "Enable Audio"                      ON)     #Enable AudioEngine
-option(USE_EDIT_BOX     "Enable EditBox"                    ON)
-option(USE_SE_JSC       "USE JavaScriptCore on MacOSX/iOS"  OFF)
-option(USE_VIDEO        "Enable VideoPlayer Component"      ON)
-option(USE_WEBVIEW      "Enable WebView Component"          OFF)
-option(USE_MIDDLEWARE   "Enable Middleware"                 ON)
-option(USE_DRAGONBONES  "Enable Dragonbones"                ON)
-# NOTE: Could only enable spine 3.8 or spine 4.2, should not enable them both.
-option(USE_SPINE_3_8   "Enable Spine 3.8"                   ON)
-option(USE_SPINE_4_2   "Enable Spine 4.2"                   OFF)
-option(USE_PHYSICS_PHYSX "USE PhysX Physics"                ON)
-option(USE_BOX2D_JSB     "USE Box2D JSB"                    ON)
+
+# WebAssembly specific options
+if(EMSCRIPTEN)
+    option(USE_SE_V8        "USE V8 JavaScript Engine"          OFF)  # V8 not available in WASM
+    option(USE_V8_DEBUGGER  "Enable Chrome Remote inspector"    OFF)  # V8 debugger not available in WASM
+    option(USE_SE_JSC       "USE JavaScriptCore on MacOSX/iOS"  OFF)  # JSC not available in WASM
+    option(USE_PHYSICS_PHYSX "USE PhysX Physics"                OFF)  # PhysX may have issues in WASM
+    option(USE_BOX2D_JSB     "USE Box2D JSB"                    ON)   # Box2D works better in WASM
+    option(USE_SOCKET       "Enable WebSocket & SocketIO"       ON)
+    option(USE_AUDIO        "Enable Audio"                      ON)
+    option(USE_EDIT_BOX     "Enable EditBox"                    OFF)  # EditBox may not work in browser
+    option(USE_VIDEO        "Enable VideoPlayer Component"      OFF)  # Video player may have issues
+    option(USE_WEBVIEW      "Enable WebView Component"          OFF)  # WebView not needed in browser
+    option(USE_MIDDLEWARE   "Enable Middleware"                 ON)
+    option(USE_DRAGONBONES  "Enable Dragonbones"                ON)
+    # NOTE: Could only enable spine 3.8 or spine 4.2, should not enable them both.
+    option(USE_SPINE_3_8   "Enable Spine 3.8"                   ON)
+    option(USE_SPINE_4_2   "Enable Spine 4.2"                   OFF)
+else()
+    option(USE_SE_V8        "USE V8 JavaScript Engine"          ON)
+    option(USE_V8_DEBUGGER  "Enable Chrome Remote inspector"    ON)
+    option(USE_SOCKET       "Enable WebSocket & SocketIO"       ON)
+    option(USE_AUDIO        "Enable Audio"                      ON)     #Enable AudioEngine
+    option(USE_EDIT_BOX     "Enable EditBox"                    ON)
+    option(USE_SE_JSC       "USE JavaScriptCore on MacOSX/iOS"  OFF)
+    option(USE_VIDEO        "Enable VideoPlayer Component"      ON)
+    option(USE_WEBVIEW      "Enable WebView Component"          OFF)
+    option(USE_MIDDLEWARE   "Enable Middleware"                 ON)
+    option(USE_DRAGONBONES  "Enable Dragonbones"                ON)
+    # NOTE: Could only enable spine 3.8 or spine 4.2, should not enable them both.
+    option(USE_SPINE_3_8   "Enable Spine 3.8"                   ON)
+    option(USE_SPINE_4_2   "Enable Spine 4.2"                   OFF)
+    option(USE_PHYSICS_PHYSX "USE PhysX Physics"                ON)
+    option(USE_BOX2D_JSB     "USE Box2D JSB"                    ON)
+endif()
 
 if(USE_SE_JSC AND APPLE)
     set(USE_SE_V8 OFF)
@@ -47,6 +67,8 @@ include(${cocosdir}/tools/simulator/libsimulator/CMakeLists.txt)
 
 if(MACOSX)
     set(LIB_NAME ${APP_NAME}-Mac)
+elseif(EMSCRIPTEN)
+    set(LIB_NAME ${APP_NAME})
 else()
     set(LIB_NAME ${APP_NAME}-Win32)
 endif()
@@ -96,6 +118,10 @@ if(WINDOWS)
         # proj.win32/stdafx.h
         # proj.win32/targetver.h
         ${UI_RESOURCES}
+    )
+elseif(EMSCRIPTEN)
+    list(APPEND PROJ_SOURCES
+        proj.wasm/main.cpp
     )
 elseif(MACOSX)
     set(UI_RESOURCES
@@ -220,5 +246,64 @@ elseif(WINDOWS)
             )
         endforeach()
         target_link_options(${LIB_NAME} PRIVATE /SUBSYSTEM:WINDOWS)
+    endif()
+elseif(EMSCRIPTEN)
+    # WebAssembly specific settings
+    target_include_directories(${LIB_NAME} PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/proj.wasm
+    )
+    
+    # Emscripten compiler and linker flags
+    set(EMSCRIPTEN_FLAGS
+        -s USE_SDL=2
+        -s USE_WEBGL2=1
+        -s FULL_ES3=1
+        -s WASM=1
+        -s ALLOW_MEMORY_GROWTH=1
+        -s INITIAL_MEMORY=134217728  # 128MB
+        -s MAXIMUM_MEMORY=268435456  # 256MB
+        -s STACK_SIZE=5242880        # 5MB
+        -s ASYNCIFY=1
+        -s EXIT_RUNTIME=0
+        -s EXPORTED_RUNTIME_METHODS=['ccall','cwrap']
+        -s EXPORTED_FUNCTIONS=['_main']
+        --preload-file ${CMAKE_CURRENT_LIST_DIR}/../../@/
+        --shell-file ${CMAKE_CURRENT_LIST_DIR}/proj.wasm/index.html
+    )
+    
+    # Debug vs Release flags
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        list(APPEND EMSCRIPTEN_FLAGS
+            -O1
+            -g3
+            -s ASSERTIONS=1
+            -s GL_ASSERTIONS=1
+            -s SAFE_HEAP=1
+        )
+    else()
+        list(APPEND EMSCRIPTEN_FLAGS
+            -O3
+            -s ASSERTIONS=0
+            --closure 1
+        )
+    endif()
+    
+    # Apply flags to target
+    target_compile_options(${LIB_NAME} PRIVATE ${EMSCRIPTEN_FLAGS})
+    target_link_options(${LIB_NAME} PRIVATE ${EMSCRIPTEN_FLAGS})
+    
+    # Set output file extension
+    set_target_properties(${LIB_NAME} PROPERTIES SUFFIX ".html")
+    
+    # Copy resources for WebAssembly
+    if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/../../jsb-adapter)
+        add_custom_command(TARGET ${LIB_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E echo "Copying resources for WebAssembly..."
+            COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/../../jsb-adapter $<TARGET_FILE_DIR:${LIB_NAME}>/jsb-adapter
+            COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/../../res $<TARGET_FILE_DIR:${LIB_NAME}>/res
+            COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/../../src $<TARGET_FILE_DIR:${LIB_NAME}>/src
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_LIST_DIR}/../../main.js $<TARGET_FILE_DIR:${LIB_NAME}>/main.js
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_LIST_DIR}/../../project.json $<TARGET_FILE_DIR:${LIB_NAME}>/project.json
+        )
     endif()
 endif()

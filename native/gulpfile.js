@@ -203,3 +203,131 @@ gulp.task('clean-simulator', async function () {
 });
 
 gulp.task('gen-simulator-release', gulp.series('gen-simulator', 'clean-simulator'));
+
+gulp.task('gen-simulator-wasm', async function () {
+    console.log('=====================================\n');
+    console.log('Building WebAssembly Simulator\n');
+    console.log('=====================================\n');
+    
+    // Check if Emscripten is available
+    let emccBin;
+    try {
+        emccBin = await new Promise((resolve, reject) => {
+            which('emcc', (err, resolvedPath) => {
+                if (err) {
+                    console.log('Emscripten not found. Please install and activate the Emscripten SDK.\n');
+                    console.log('Visit: https://emscripten.org/docs/getting_started/downloads.html\n');
+                    return reject(err);
+                }
+                resolve(resolvedPath);
+            });
+        });
+    } catch (err) {
+        throw new Error('Emscripten SDK is required for WebAssembly build');
+    }
+
+    console.log('remove old WebAssembly build\n');
+    let wasmBuildDir = Path.join(__dirname, './tools/simulator/frameworks/runtime-src/build-wasm');
+    await del(wasmBuildDir);
+
+    let simulatorSrcDir = absolutePath('./tools/simulator/frameworks/runtime-src');
+    await fs.ensureDir(wasmBuildDir);
+
+    console.log('=====================================\n');
+    console.log('Configure WebAssembly project\n');
+    console.log('=====================================\n');
+    
+    // Copy WebAssembly CMakeLists.txt
+    await fs.copy(
+        Path.join(simulatorSrcDir, 'CMakeLists-wasm.txt'),
+        Path.join(wasmBuildDir, 'CMakeLists.txt')
+    );
+
+    await new Promise((resolve, reject) => {
+        let args = [];
+        args.push('cmake', '.');
+        args.push('-DCMAKE_BUILD_TYPE=Release');
+        
+        if (process.env.EMSCRIPTEN) {
+            args.push(`-DCMAKE_TOOLCHAIN_FILE=${process.env.EMSCRIPTEN}/cmake/Modules/Platform/Emscripten.cmake`);
+        }
+
+        const newEnv = {};
+        Object.assign(newEnv, process.env);
+        Object.keys(newEnv).filter(x => x.toLowerCase().startsWith('npm_')).forEach(e => delete newEnv[e]);
+        
+        let emcmakeProcess = spawn('emcmake', args, {
+            cwd: wasmBuildDir,
+            env: newEnv,
+        });
+        
+        emcmakeProcess.on('close', (code) => {
+            if (code === 0) {
+                console.log('CMake configuration finished!');
+                resolve();
+            } else {
+                reject(new Error(`CMake configuration failed with code ${code}`));
+            }
+        });
+        
+        emcmakeProcess.on('error', err => {
+            console.error(err);
+            reject(err);
+        });
+        
+        emcmakeProcess.stderr.on('data', err => {
+            console.error(err.toString ? err.toString() : err);
+        });
+        
+        emcmakeProcess.stdout.on('data', data => {
+            console.log(data.toString ? data.toString() : data);
+        });
+    });
+
+    console.log('=====================================\n');
+    console.log('Build WebAssembly project\n');
+    console.log('=====================================\n');
+    
+    await new Promise((resolve, reject) => {
+        let makeArgs = ['make'];
+        
+        const newEnv = {};
+        Object.assign(newEnv, process.env);
+        Object.keys(newEnv).filter(x => x.toLowerCase().startsWith('npm_')).forEach(e => delete newEnv[e]);
+        
+        let buildProcess = spawn('emmake', makeArgs, {
+            cwd: wasmBuildDir,
+            env: newEnv,
+        });
+        
+        buildProcess.on('close', (code) => {
+            if (code === 0) {
+                console.log('WebAssembly build finished!');
+                console.log('=====================================\n');
+                console.log('WebAssembly build completed!\n');
+                console.log('Output files are in: tools/simulator/frameworks/runtime-src/build-wasm/\n');
+                console.log('To run the simulator:\n');
+                console.log('1. cd tools/simulator/frameworks/runtime-src/build-wasm');
+                console.log('2. python3 -m http.server 8080');
+                console.log('3. Open http://localhost:8080/SimulatorApp.html in your browser\n');
+                console.log('=====================================\n');
+                resolve();
+            } else {
+                reject(new Error(`Build failed with code ${code}`));
+            }
+        });
+        
+        buildProcess.on('error', err => {
+            console.error(err);
+            reject(err);
+        });
+        
+        buildProcess.stderr.on('data', err => {
+            console.error(err.toString ? err.toString() : err);
+        });
+        
+        buildProcess.stdout.on('data', data => {
+            console.log(data.toString ? data.toString() : data);
+        });
+    });
+});
