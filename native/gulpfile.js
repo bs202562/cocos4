@@ -209,17 +209,35 @@ gulp.task('gen-simulator-wasm', async function () {
     console.log('Building WebAssembly Simulator\n');
     console.log('=====================================\n');
     
+    // Set Emscripten paths for Windows
+    const emsdkRoot = 'D:\\devlib\\emsdk';
+    const emscriptenPath = Path.join(emsdkRoot, 'upstream', 'emscripten');
+    
+    // Update environment variables
+    process.env.EMSDK = emsdkRoot;
+    process.env.EMSCRIPTEN = emscriptenPath;
+    process.env.PATH = `${emsdkRoot};${emscriptenPath};${process.env.PATH}`;
+    
     // Check if Emscripten is available
     let emccBin;
     try {
+        // Try to find emcc in PATH first
         emccBin = await new Promise((resolve, reject) => {
             which('emcc', (err, resolvedPath) => {
                 if (err) {
-                    console.log('Emscripten not found. Please install and activate the Emscripten SDK.\n');
-                    console.log('Visit: https://emscripten.org/docs/getting_started/downloads.html\n');
-                    return reject(err);
+                    // Try direct path
+                    const directPath = Path.join(emscriptenPath, 'emcc.bat');
+                    if (require('fs').existsSync(directPath)) {
+                        console.log(`Using Emscripten at: ${emscriptenPath}\n`);
+                        resolve(directPath);
+                    } else {
+                        console.log('Emscripten not found. Please install and activate the Emscripten SDK.\n');
+                        console.log('Visit: https://emscripten.org/docs/getting_started/downloads.html\n');
+                        return reject(err);
+                    }
+                } else {
+                    resolve(resolvedPath);
                 }
-                resolve(resolvedPath);
             });
         });
     } catch (err) {
@@ -247,18 +265,19 @@ gulp.task('gen-simulator-wasm', async function () {
         let args = [];
         args.push('cmake', '.');
         args.push('-DCMAKE_BUILD_TYPE=Release');
-        
-        if (process.env.EMSCRIPTEN) {
-            args.push(`-DCMAKE_TOOLCHAIN_FILE=${process.env.EMSCRIPTEN}/cmake/Modules/Platform/Emscripten.cmake`);
-        }
+        args.push(`-DCMAKE_TOOLCHAIN_FILE=${emscriptenPath}/cmake/Modules/Platform/Emscripten.cmake`);
 
         const newEnv = {};
         Object.assign(newEnv, process.env);
         Object.keys(newEnv).filter(x => x.toLowerCase().startsWith('npm_')).forEach(e => delete newEnv[e]);
         
-        let emcmakeProcess = spawn('emcmake', args, {
+        // Use direct path for emcmake
+        const emcmakePath = Path.join(emscriptenPath, 'emcmake.bat');
+        
+        let emcmakeProcess = spawn(emcmakePath, args, {
             cwd: wasmBuildDir,
             env: newEnv,
+            shell: true
         });
         
         emcmakeProcess.on('close', (code) => {
@@ -295,9 +314,13 @@ gulp.task('gen-simulator-wasm', async function () {
         Object.assign(newEnv, process.env);
         Object.keys(newEnv).filter(x => x.toLowerCase().startsWith('npm_')).forEach(e => delete newEnv[e]);
         
-        let buildProcess = spawn('emmake', makeArgs, {
+        // Use direct path for emmake
+        const emmakePath = Path.join(emscriptenPath, 'emmake.bat');
+        
+        let buildProcess = spawn(emmakePath, makeArgs, {
             cwd: wasmBuildDir,
             env: newEnv,
+            shell: true
         });
         
         buildProcess.on('close', (code) => {
