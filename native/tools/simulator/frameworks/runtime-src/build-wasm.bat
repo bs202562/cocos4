@@ -38,6 +38,16 @@ cd "%BUILD_DIR%"
 REM Copy the WebAssembly specific CMakeLists.txt
 copy ..\CMakeLists-wasm.txt .\CMakeLists.txt
 
+REM Debug: Show the directory structure
+echo Current directory: %CD%
+echo Checking for cocos root at: %CD%\..\..\..\..\..\CMakeLists.txt
+if exist "%CD%\..\..\..\..\..\CMakeLists.txt" (
+    echo Found cocos root CMakeLists.txt
+) else (
+    echo ERROR: Cannot find cocos root CMakeLists.txt
+    dir /b "%CD%\..\..\..\..\..\"
+)
+
 REM Configure with Emscripten using Ninja generator
 echo Configuring WebAssembly build...
 call %EMCMAKE_CMD% cmake . ^

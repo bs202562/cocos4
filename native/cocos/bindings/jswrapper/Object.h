@@ -27,19 +27,15 @@
 
 #include "config.h"
 
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_SM
+#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_NONE
+    // Object is defined in SeApi-stub.h, no need to include anything
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_SM
     #include "sm/Object.h"
-#endif
-
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_V8
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_V8
     #include "v8/Object.h"
-#endif
-
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_JSC
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_JSC
     #include "jsc/Object.h"
-#endif
-
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_CHAKRACORE
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_CHAKRACORE
     #include "chakracore/Object.h"
 #endif
 

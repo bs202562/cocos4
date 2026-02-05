@@ -27,31 +27,25 @@
 
 #include "config.h"
 
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_SM
+#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_NONE
+    #include "none/SeApi-stub.h"
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_SM
     #include "sm/SeApi.h"
-#endif
-
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_V8
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_V8
     #include "v8/SeApi.h"
-#endif
-
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_JSC
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_JSC
     #include "jsc/SeApi.h"
-#endif
-
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_CHAKRACORE
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_CHAKRACORE
     #include "chakracore/SeApi.h"
-#endif
-
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_NAPI
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_NAPI
     #include "napi/SeApi.h"
-#endif
-
-#if SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_JSVM
+#elif SCRIPT_ENGINE_TYPE == SCRIPT_ENGINE_JSVM
     #include "jsvm/SeApi.h"
 #endif
 
+#if SCRIPT_ENGINE_TYPE != SCRIPT_ENGINE_NONE
 #include "HandleObject.h"
 #include "Object.h"
 #include "State.h"
 #include "Value.h"
+#endif
